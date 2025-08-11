@@ -43,14 +43,23 @@ export default function EditObject() {
   }, []);
 
   async function uploadToCloudinary(file: File) {
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
-    const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!;
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !preset) {
+      throw new Error('Setează NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME și NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET în .env.local');
+    }
+
     const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
     const form = new FormData();
     form.append('file', file);
     form.append('upload_preset', preset);
+
     const resp = await fetch(url, { method: 'POST', body: form });
-    if (!resp.ok) throw new Error('Cloudinary upload failed');
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`Cloudinary upload failed: [${resp.status}] ${body}`);
+    }
     const data = await resp.json();
     return data.secure_url as string;
   }
@@ -62,7 +71,12 @@ export default function EditObject() {
     try {
       const { error } = await supabase
         .from('objects')
-        .update({ title, description, category, image_url: imageUrl })
+        .update({
+          title,
+          description,
+          category,
+          image_url: imageUrl // asigură actualizarea imaginii
+        })
         .eq('id', objId);
 
       if (error) throw error;
@@ -89,15 +103,21 @@ export default function EditObject() {
         <input type="file" accept="image/*" onChange={async (e)=>{
           const f = e.target.files?.[0];
           if (f) {
-            const url = await uploadToCloudinary(f);
-            setImageUrl(url);
+            try {
+              const url = await uploadToCloudinary(f);
+              setImageUrl(url);
+            } catch (err: any) {
+              setMsg(err.message);
+            }
           }
         }} />
         {imageUrl && <img src={imageUrl} alt="preview" style={{width:240, borderRadius:12}}/>}
 
         <div style={{display:'flex', gap:8}}>
           <button type="submit">Salvează</button>
-          <a href={objId ? `/objects/${objId}` : '/objects'}><button type="button" className="secondary">Renunță</button></a>
+          <a href={objId ? `/objects/${objId}` : '/objects'}>
+            <button type="button" className="secondary">Renunță</button>
+          </a>
         </div>
         {msg && <p className="small">{msg}</p>}
       </form>
