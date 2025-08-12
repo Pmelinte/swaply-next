@@ -9,42 +9,50 @@ type Obj = {
   created_at?: string | null;
 };
 
+const capitalize = (s?: string | null) =>
+  s && s.length ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+
 export default function ObjectsPage() {
   const [rows, setRows] = useState<Obj[]>([]);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       const { data, error } = await supabase
         .from('objects')
-        .select('*')
+        .select('id,title,description,image_url,created_at')
         .order('created_at', { ascending: false })
-        .limit(50);
-
-      console.log('objects error =>', error);
-      console.log('objects rows  =>', data?.length);
+        .limit(100);
 
       if (error) setErr(error.message);
       setRows(data ?? []);
+      setLoading(false);
     })();
   }, []);
 
   return (
-    <div>
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <h2>Objects</h2>
+
+      {loading && <p>Loading…</p>}
       {err && <p style={{ color: 'salmon' }}>Error: {err}</p>}
-      {rows.length === 0 ? (
-        <p>No objects found.</p>
-      ) : (
-        <ul style={{ display: 'grid', gap: 12, padding: 0, listStyle: 'none' }}>
-          {rows.map(o => (
-            <li key={o.id} style={{ padding: 12, border: '1px solid #333', borderRadius: 8 }}>
-              <strong>{o.title || '(no title)'}</strong>
-              <div style={{ opacity: 0.8 }}>{o.description}</div>
-            </li>
-          ))}
-        </ul>
-      )}
+      {!loading && rows.length === 0 && <p>No objects found.</p>}
+
+      <ul style={{ display: 'grid', gap: 16, padding: 0, listStyle: 'none' }}>
+        {rows.map((o) => (
+          <li
+            key={o.id}
+            style={{ border: '1px solid #333', borderRadius: 12, padding: 16 }}
+          >
+            <strong style={{ display: 'block', fontSize: 18 }}>
+              {capitalize(o.title)}
+            </strong>
+            <span style={{ opacity: 0.8 }}>{o.description}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
