@@ -1,20 +1,22 @@
-project-root/
-│
-├─ src/
-│   ├─ types.ts          ← aici pui fișierul
-│   ├─ schemas.ts        ← validările Zod
-│   ├─ lib/
-│   │   └─ supabaseClient.ts
-│   ├─ pages/ sau app/
-│   └─ ...
-│
-├─ package.json
-└─ ...
+// src/types.ts
+export type UUID = string;
+
+export interface User {
+  id: UUID;
+  email: string;
+  name?: string | null;
+  avatar_url?: string | null;
+  created_at?: string | null;
+}
+
 export interface ObjectItem {
   id: UUID;
   user_id: UUID;
   title: string;
   description: string;
+  image_url?: string | null;
+  category?: string | null;
+  created_at?: string | null;
 }
 
 export interface Message {
@@ -22,6 +24,7 @@ export interface Message {
   from_user_id: UUID;
   to_user_id: UUID;
   text: string;
+  created_at?: string | null;
 }
 
 export interface Feedback {
@@ -29,4 +32,5 @@ export interface Feedback {
   from_user_id: UUID;
   to_user_id: UUID;
   comment: string;
+  created_at?: string | null;
 }
