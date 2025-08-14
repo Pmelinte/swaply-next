@@ -13,8 +13,8 @@ export default function AuthCallback() {
   useEffect(() => {
     (async () => {
       try {
-        // Preia tokenul din URL și salvează sesiunea în cookies
-        const { error } = await supabase.auth.getSessionFromUrl({ storeSession: true })
+        // Supabase v2: schimbă codul/tokens din URL într-o sesiune salvată
+        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href)
         if (error) {
           setMsg('Eroare la autentificare: ' + error.message)
           return
@@ -23,7 +23,7 @@ export default function AuthCallback() {
         setMsg('Eroare: ' + e.message)
         return
       }
-      // Gata – mergem acasă
+      // Done → acasă
       window.location.replace('/')
     })()
   }, [])
