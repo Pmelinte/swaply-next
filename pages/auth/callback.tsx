@@ -1,83 +1,62 @@
 // pages/auth/callback.tsx
-import { useEffect, useState } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import { supabase } from '../../lib/supabaseClient';
-
-type Status = 'working' | 'missing' | 'error' | 'done';
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/router'
+import { supabase } from '../../lib/supabaseClient'
 
 export default function AuthCallback() {
-  const router = useRouter();
-  const [status, setStatus] = useState<Status>('working');
-  const [message, setMessage] = useState<string>('');
+  const router = useRouter()
+  const [msg, setMsg] = useState('Se confirmă autentificarea…')
 
   useEffect(() => {
     const run = async () => {
-      if (typeof window === 'undefined') return;
-
-      const url = window.location.href;
-      const hasCode = url.includes('code=');
-
-      if (!hasCode) {
-        setStatus('missing');
-        return;
+      // 1) Dacă deja avem sesiune, mergem acasă
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.replace('/')
+        return
       }
 
-      // Schimbă codul din URL pe sesiune (PKCE)
-      const { error } = await supabase.auth.exchangeCodeForSession(url);
+      // 2) FLOW IMPLICIT (fragment): #access_token=…&refresh_token=…
+      // ex: /auth/callback#access_token=…&refresh_token=…
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hash = window.location.hash.slice(1) // scoatem '#'
+        const h = new URLSearchParams(hash)
+        const access_token = h.get('access_token') || undefined
+        const refresh_token = h.get('refresh_token') || undefined
 
-      if (error) {
-        setStatus('error');
-        setMessage(error.message ?? 'Autentificarea a eșuat.');
-        return;
+        if (access_token) {
+          const { error } = await supabase.auth.setSession({
+            access_token,
+            // refresh_token poate lipsi pe unele provider-e; trimitem '' ca fallback
+            refresh_token: refresh_token ?? ''
+          })
+          if (!error) {
+            router.replace('/')
+            return
+          }
+        }
       }
 
-      setStatus('done');
+      // 3) FLOW PKCE (query): ?code=…
+      const code = router.query.code as string | undefined
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!error) {
+          router.replace('/')
+          return
+        }
+      }
 
-      // Dacă ai un parametru ?next=/ruta, redirecționează acolo; altfel către /
-      const next =
-        new URL(url).searchParams.get('next') ??
-        '/';
-      router.replace(next);
-    };
+      // 4) Nimic de procesat
+      setMsg('Codul de autentificare lipsește. Întoarce-te la pagina de login și încearcă din nou.')
+    }
 
-    run();
-  }, [router]);
+    run()
+  }, [router])
 
   return (
-    <>
-      <Head>
-        <title>Autentificare…</title>
-        <meta name="robots" content="noindex" />
-      </Head>
-
-      <main
-        style={{
-          minHeight: '70vh',
-          display: 'grid',
-          placeItems: 'center',
-          padding: '2rem',
-          color: '#eaeaea',
-        }}
-      >
-        {status === 'working' && <p>Se verifică codul de autentificare…</p>}
-
-        {status === 'missing' && (
-          <div style={{ textAlign: 'center' }}>
-            <h1>Codul de autentificare lipsește</h1>
-            <p>Întoarce-te la pagina de login și încearcă din nou.</p>
-          </div>
-        )}
-
-        {status === 'error' && (
-          <div style={{ textAlign: 'center' }}>
-            <h1>Eroare la autentificare</h1>
-            <p style={{ opacity: 0.8 }}>{message}</p>
-          </div>
-        )}
-
-        {status === 'done' && <p>Autentificat. Redirecționare…</p>}
-      </main>
-    </>
-  );
+    <div style={{minHeight:'70vh',display:'grid',placeItems:'center',padding:'2rem'}}>
+      <p style={{opacity:.6,fontSize:'clamp(18px,3vw,42px)',textAlign:'center'}}>{msg}</p>
+    </div>
+  )
 }
