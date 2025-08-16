@@ -1,115 +1,83 @@
 // pages/auth/callback.tsx
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import { createClient } from "@supabase/supabase-js";
+import { useEffect, useState } from 'react';
+import Head from 'next/head';
+import { useRouter } from 'next/router';
+import { supabase } from '../../lib/supabaseClient';
 
-// Client Supabase
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  {
-    auth: {
-      detectSessionInUrl: false, // gestionăm manual
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  }
-);
+type Status = 'working' | 'missing' | 'error' | 'done';
 
-export default function AuthCallbackPage() {
+export default function AuthCallback() {
   const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "success" | "error">(
-    "loading"
-  );
-  const [message, setMessage] = useState("Se finalizează autentificarea...");
+  const [status, setStatus] = useState<Status>('working');
+  const [message, setMessage] = useState<string>('');
 
   useEffect(() => {
-    if (!router.isReady) return;
-
     const run = async () => {
-      try {
-        // 1. Extragem codul din URL
-        const codeFromQuery =
-          typeof router.query.code === "string" ? router.query.code : null;
+      if (typeof window === 'undefined') return;
 
-        let code = codeFromQuery;
+      const url = window.location.href;
+      const hasCode = url.includes('code=');
 
-        // fallback din hash (#code=...) dacă vine așa
-        if (!code && typeof window !== "undefined") {
-          const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-          const codeFromHash = hash.get("code");
-          if (codeFromHash) code = codeFromHash;
-        }
-
-        if (!code) {
-          setStatus("error");
-          setMessage("Codul de autentificare lipsește din URL.");
-          setTimeout(() => router.replace("/login"), 1500);
-          return;
-        }
-
-        // 2. Facem schimbul cod -> sesiune
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (error) {
-          setStatus("error");
-          setMessage(`Eroare la autentificare: ${error.message}`);
-          setTimeout(() => router.replace("/login"), 1800);
-          return;
-        }
-
-        // 3. Redirecționăm după login
-        let redirectTo = "/";
-        try {
-          const stored = localStorage.getItem("postAuthRedirect");
-          if (stored) {
-            redirectTo = stored;
-            localStorage.removeItem("postAuthRedirect");
-          }
-        } catch (_) {
-          // localStorage indisponibil
-        }
-
-        setStatus("success");
-        setMessage("Autentificare reușită. Redirecționăm...");
-        router.replace(redirectTo);
-      } catch (err: any) {
-        setStatus("error");
-        setMessage(
-          `Eroare neașteptată: ${err?.message || "necunoscută"}`
-        );
-        setTimeout(() => router.replace("/login"), 1800);
+      if (!hasCode) {
+        setStatus('missing');
+        return;
       }
+
+      // Schimbă codul din URL pe sesiune (PKCE)
+      const { error } = await supabase.auth.exchangeCodeForSession(url);
+
+      if (error) {
+        setStatus('error');
+        setMessage(error.message ?? 'Autentificarea a eșuat.');
+        return;
+      }
+
+      setStatus('done');
+
+      // Dacă ai un parametru ?next=/ruta, redirecționează acolo; altfel către /
+      const next =
+        new URL(url).searchParams.get('next') ??
+        '/';
+      router.replace(next);
     };
 
     run();
   }, [router]);
 
   return (
-    <main
-      style={{
-        minHeight: "60vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "2rem",
-        textAlign: "center",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <div
+    <>
+      <Head>
+        <title>Autentificare…</title>
+        <meta name="robots" content="noindex" />
+      </Head>
+
+      <main
         style={{
-          maxWidth: 520,
-          width: "100%",
-          border: "1px solid #e5e7eb",
-          borderRadius: 16,
-          padding: "1.5rem",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+          minHeight: '70vh',
+          display: 'grid',
+          placeItems: 'center',
+          padding: '2rem',
+          color: '#eaeaea',
         }}
       >
-        {status === "loading" && <p>Se finalizează autentificarea...</p>}
-        {status === "success" && <p style={{ color: "green" }}>{message}</p>}
-        {status === "error" && <p style={{ color: "red" }}>{message}</p>}
-      </div>
-    </main>
+        {status === 'working' && <p>Se verifică codul de autentificare…</p>}
+
+        {status === 'missing' && (
+          <div style={{ textAlign: 'center' }}>
+            <h1>Codul de autentificare lipsește</h1>
+            <p>Întoarce-te la pagina de login și încearcă din nou.</p>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div style={{ textAlign: 'center' }}>
+            <h1>Eroare la autentificare</h1>
+            <p style={{ opacity: 0.8 }}>{message}</p>
+          </div>
+        )}
+
+        {status === 'done' && <p>Autentificat. Redirecționare…</p>}
+      </main>
+    </>
   );
 }
