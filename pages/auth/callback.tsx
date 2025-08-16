@@ -49,7 +49,7 @@ export default function AuthCallbackPage() {
         }
 
         // 2. Facem schimbul cod -> sesiune
-        const { error } = await supabase.auth.exchangeCodeForSession({ code });
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (error) {
           setStatus("error");
