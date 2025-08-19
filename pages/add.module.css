@@ -1,0 +1,25 @@
+/* pages/add.module.css */
+.title { margin-bottom: 12px; font-weight: 700; font-size: 2.25rem; line-height: 1.2; }
+.muted { margin-bottom: 24px; opacity: .8; }
+
+.form { display: grid; gap: 12px; }
+.input, .select, .textarea {
+  padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%;
+}
+
+.fieldset { border: 1px solid #eee; border-radius: 8px; padding: 12px; }
+.legend { font-weight: 600; }
+.hint { font-size: 12px; color: #666; }
+.separator { text-align: center; opacity: .6; margin: 8px 0; }
+
+.preview { max-width: 100%; max-height: 180px; border-radius: 8px; border: 1px solid #eee; }
+
+.button {
+  margin-top: 8px; padding: 12px 16px; border-radius: 10px; border: none;
+  background: #111; color: #fff; cursor: pointer;
+}
+.button[disabled] { background: #bbb; cursor: not-allowed; }
+
+.alert { padding: 10px; border-radius: 8px; }
+.alertError { color: #b00020; background: #fee; }
+.alertOk { color: #0a7; background: #eefaf6; }
