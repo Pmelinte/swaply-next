@@ -7,7 +7,7 @@ export const config = {
   api: { bodyParser: { sizeLimit: "10mb" } },
 };
 
-// ia primul sinonim din etichetele ImageNet (care vin ca "foo, bar, baz")
+// ia primul sinonim din etichetele ImageNet (vin ca "foo, bar, baz")
 function firstSynonym(s: string) {
   return s.split(",")[0].trim();
 }
@@ -18,11 +18,12 @@ function cap(s: string) {
 // Mapare EN -> RO pentru titluri prietenoase
 function roLabel(label: string) {
   const L = label.toLowerCase();
+
   // audio
   if (L.includes("loudspeaker") || L.includes("speaker")) return "Boxe";
   if (L.includes("headphone") || L.includes("earphone") || L.includes("headset")) return "Căști";
 
-  // electronice comune
+  // mobil / electronice
   if (L.includes("laptop") || L.includes("notebook")) return "Laptop";
   if (L.includes("cellular telephone") || L.includes("mobile phone") || L.includes("smartphone")) return "Telefon";
   if (L.includes("television")) return "Televizor";
@@ -32,6 +33,10 @@ function roLabel(label: string) {
   if (L.includes("keyboard")) return "Tastatură";
   if (L.includes("mouse")) return "Mouse";
 
+  // casă / mobilier
+  if (L.includes("bed") || L.includes("four-poster")) return "Pat";
+  if (L.includes("sofa") || L.includes("couch") || L.includes("studio couch") || L.includes("futon")) return "Canapea";
+
   // fashion / sport / altele
   if (L.includes("t-shirt") || L.includes("jersey")) return "Tricou";
   if (L.includes("jean") || L.includes("denim")) return "Blugi";
@@ -40,7 +45,6 @@ function roLabel(label: string) {
   if (L.includes("shoe") || L.includes("sneaker") || L.includes("running shoe")) return "Pantofi";
   if (L.includes("backpack") || L.includes("rucksack")) return "Rucsac";
 
-  // fallback: primul sinonim, capitalizat
   return cap(firstSynonym(label));
 }
 
@@ -100,7 +104,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const out = (await hfRes.json()) as HFResult;
-
     const top = Array.isArray(out) && out.length ? out[0] : null;
     if (!top) return res.status(200).json({ suggestion: null, raw: out });
 

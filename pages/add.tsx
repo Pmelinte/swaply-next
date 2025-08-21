@@ -16,22 +16,14 @@ type HFTop = { label: string; score: number };
 
 export default function AddObjectPage() {
   const router = useRouter();
-  const supabase = useMemo(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, anon);
-  }, []);
+  const supabase = useMemo(() => createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), []);
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [user, setUser] = useState<User | null>(null);
 
-  const [form, setForm] = useState<NewObjectForm>({
-    title: "",
-    description: "",
-    category: "",
-    imageUrl: "",
-  });
-
+  const [form, setForm] = useState<NewObjectForm>({ title: "", description: "", category: "", imageUrl: "" });
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -43,52 +35,23 @@ export default function AddObjectPage() {
   const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
   const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
   const [classifyError, setClassifyError] = useState<string | null>(null);
+  const [top3, setTop3] = useState<string[]>([]);
   const urlDebounce = useRef<number | null>(null);
 
   // --- AUTH ---
   useEffect(() => {
-    let isMounted = true;
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (!isMounted) return;
-      if (error) console.error("Supabase getUser error:", error);
-      setUser(data?.user ?? null);
-      setCheckingAuth(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => {
-      isMounted = false;
-      sub.subscription?.unsubscribe();
-    };
+    let ok = true;
+    supabase.auth.getUser().then(({ data }) => { if (!ok) return; setUser(data?.user ?? null); setCheckingAuth(false); });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUser(s?.user ?? null));
+    return () => { ok = false; sub.subscription?.unsubscribe(); };
   }, [supabase]);
 
-  useEffect(() => {
-    if (!checkingAuth && !user) router.replace("/auth?redirect=/add");
-  }, [checkingAuth, user, router]);
+  useEffect(() => { if (!checkingAuth && !user) router.replace("/auth?redirect=/add"); }, [checkingAuth, user, router]);
 
-  // --- HELPERE ---
-  const onInput =
-    (key: keyof NewObjectForm) =>
-    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm((prev) => ({ ...prev, [key]: e.target.value }));
-
-  async function fileToBase64(f: File): Promise<string> {
-    const reader = new FileReader();
-    return new Promise((resolve, reject) => {
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = reject;
-      reader.readAsDataURL(f);
-    });
-  }
-
+  // --- HELPERE NUME/BRAND ---
   function lastPathSegmentFromUrl(u: string): string {
-    try {
-      const url = new URL(u);
-      return url.pathname.split("/").filter(Boolean).pop() || "";
-    } catch {
-      return u.split("/").filter(Boolean).pop() || "";
-    }
+    try { const url = new URL(u); return url.pathname.split("/").filter(Boolean).pop() || ""; }
+    catch { return u.split("/").filter(Boolean).pop() || ""; }
   }
   function cleanNameLikeFilename(name: string): string {
     let base = name.replace(/\.[a-z0-9]{2,4}$/i, "");
@@ -99,16 +62,44 @@ export default function AddObjectPage() {
                .replace(/[()[\]]/g, " ")
                .replace(/\s{2,}/g, " ")
                .trim();
+    // dacă e doar numeric sau mai scurt de 3 caractere -> ignorăm
+    if (!/[a-zA-ZăâîșțÁÂÎȘȚ]/.test(base) || base.length < 3) return "";
     return base;
   }
-  function buildNiceTitle(label: string | null, fromName: string | null): string | null {
+  function brandFromUrl(u?: string): string {
+    if (!u) return "";
+    try {
+      const host = new URL(u).hostname.toLowerCase();
+      if (host.includes("jysk")) return "JYSK";
+      if (host.includes("ikea")) return "IKEA";
+      if (host.includes("emag")) return "eMAG";
+      if (host.includes("dedeman")) return "Dedeman";
+      if (host.includes("altex")) return "Altex";
+      if (host.includes("leroymerlin")) return "Leroy Merlin";
+      return "";
+    } catch { return ""; }
+  }
+  function buildNiceTitle(label: string | null, fromName: string | null, url?: string): string | null {
     const L = (label || "").trim();
-    const N = (fromName || "").trim();
+    let N = (fromName || "").trim();
+    const B = brandFromUrl(url);
+    if (!N && B) N = B;
     if (L && N) {
       if (N.toLowerCase().startsWith(L.toLowerCase())) return N;
       return `${L} ${N}`.trim();
     }
     return L || N || null;
+  }
+
+  // --- FORM INPUT ---
+  const onInput =
+    (key: keyof NewObjectForm) =>
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  async function fileToBase64(f: File): Promise<string> {
+    const reader = new FileReader();
+    return new Promise((resolve, reject) => { reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(f); });
   }
 
   function mapLabelsToCategory(labels: string[]): string {
@@ -127,10 +118,8 @@ export default function AddObjectPage() {
 
   async function classifyWithPayload(payload: object, preview?: string, meta?: { fileName?: string; url?: string }) {
     try {
-      setClassifying(true);
-      setClassifyError(null);
-      setSuggestedTitle(null);
-      setSuggestedCategory(null);
+      setClassifying(true); setClassifyError(null);
+      setSuggestedTitle(null); setSuggestedCategory(null);
       if (preview) setPreviewUrl(preview);
 
       const res = await fetch("/api/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -139,8 +128,10 @@ export default function AddObjectPage() {
       if ((json as any).error) throw new Error((json as any).error);
 
       const label = (json?.suggestion ?? "").trim();
-      const rawLabels = (json?.raw ?? []).map((x) => x.label).filter(Boolean);
+      const raw = (json?.raw ?? []);
+      setTop3(raw.slice(0, 3).map(x => x.label.split(",")[0]));
 
+      const rawLabels = raw.map((x) => x.label);
       const cat = mapLabelsToCategory(rawLabels);
       if (!form.category) setForm((p) => ({ ...p, category: cat }));
       setSuggestedCategory(cat);
@@ -149,7 +140,7 @@ export default function AddObjectPage() {
       if (meta?.fileName) nameFromSource = cleanNameLikeFilename(meta.fileName);
       else if (meta?.url) nameFromSource = cleanNameLikeFilename(lastPathSegmentFromUrl(meta.url));
 
-      const nice = buildNiceTitle(label || null, nameFromSource || null);
+      const nice = buildNiceTitle(label || null, nameFromSource || null, meta?.url);
       setSuggestedTitle(nice);
       if (nice && !form.title.trim()) {
         const finalTitle = nice.length > 80 ? nice.slice(0, 77).trim() + "…" : nice;
@@ -186,7 +177,7 @@ export default function AddObjectPage() {
     if (val && /^https?:\/\//i.test(val)) {
       urlDebounce.current = window.setTimeout(() => { classifyFromUrl(val); }, 600);
     } else {
-      setSuggestedTitle(null); setSuggestedCategory(null); setClassifyError(null);
+      setSuggestedTitle(null); setSuggestedCategory(null); setClassifyError(null); setTop3([]);
     }
   };
 
@@ -230,22 +221,18 @@ export default function AddObjectPage() {
     }
   }
 
-  if (checkingAuth) {
-    return (
-      <Layout>
-        <h1 className={s.title}>Se verifică autentificarea…</h1>
-        <p className={s.muted}>Rămânem pe /add până aflăm sigur dacă ești logat.</p>
-      </Layout>
-    );
-  }
-  if (!user) {
-    return (
-      <Layout>
-        <h1 className={s.title}>Trebuie să te autentifici</h1>
-        <p className={s.muted}>Te redirecționăm la pagina de autentificare…</p>
-      </Layout>
-    );
-  }
+  if (checkingAuth) return (
+    <Layout>
+      <h1 className={s.title}>Se verifică autentificarea…</h1>
+      <p className={s.muted}>Rămânem pe /add până aflăm sigur dacă ești logat.</p>
+    </Layout>
+  );
+  if (!user) return (
+    <Layout>
+      <h1 className={s.title}>Trebuie să te autentifici</h1>
+      <p className={s.muted}>Te redirecționăm la pagina de autentificare…</p>
+    </Layout>
+  );
 
   return (
     <Layout>
@@ -294,6 +281,14 @@ export default function AddObjectPage() {
             {previewUrl && (
               <div style={{ marginTop: 8 }}>
                 <img src={previewUrl} alt="Previzualizare" className={s.preview} />
+              </div>
+            )}
+
+            {top3.length > 0 && (
+              <div className={s.chips}>
+                {top3.map((t) => (
+                  <span key={t} className={s.chip}>{t}</span>
+                ))}
               </div>
             )}
 
