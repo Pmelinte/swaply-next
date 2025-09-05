@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf .next"
   },
   "dependencies": {
     "@faker-js/faker": "^9.9.0",
@@ -27,5 +29,8 @@
     "eslint-config-next": "^15.4.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.18.0"
   }
 }

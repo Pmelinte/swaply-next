@@ -8,7 +8,7 @@ import s from "./add.module.css";
 type NewObjectForm = {
   title: string;
   description: string;
-  category: string;
+  category: string;   // UI categories (electronice/mobilier/papetărie/...)
   imageUrl: string;
 };
 
@@ -34,7 +34,7 @@ export default function AddObjectPage() {
 
   const [classifying, setClassifying] = useState(false);
   const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
-  const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
+  const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null); // arată path din taxonomie sau categoria locală
   const [classifyError, setClassifyError] = useState<string | null>(null);
   const [top3, setTop3] = useState<string[]>([]);
   const urlDebounce = useRef<number | null>(null);
@@ -113,13 +113,13 @@ export default function AddObjectPage() {
       "HP","DELL","LENOVO","ASUS","ACER","APPLE","SAMSUNG","SONY","LG","CANON","NIKON",
       // Fashion / Sport
       "ADIDAS","NIKE","PUMA",
-      // Home / Papetărie ușor de prins
+      // Home / Papetărie
       "IKEA","JYSK","PILOT","PENTEL","ZEBRA","UNI","LAMY","PARKER","STABILO"
     ];
     return BRANDS.find((b) => T.includes(b)) || "";
   }
 
-  // Traducere EN->RO pentru etichete (pt titlu și chips)
+  // Traducere EN->RO pentru etichete (pt titlu + chips)
   function roLabelClient(label: string) {
     const L = label.toLowerCase();
     // instrumente de scris
@@ -130,7 +130,7 @@ export default function AddObjectPage() {
     if (L.includes("marker") || L.includes("highlighter")) return "Marker";
     if (L.includes("notebook") && !L.includes("computer")) return "Caiet";
 
-    // ce aveai deja, pe scurt
+    // electronice & diverse
     if (L.includes("loudspeaker") || L.includes("speaker")) return "Boxe";
     if (L.includes("headphone") || L.includes("earphone") || L.includes("headset")) return "Căști";
     if (L.includes("laptop") || L.includes("notebook computer")) return "Laptop";
@@ -178,15 +178,15 @@ export default function AddObjectPage() {
     });
   }
 
-  // ----------- MAPARE CATEGORII (cu "papetărie" + potrivire pe cuvinte) -----------
+  // ----------- MAPARE CATEGORII (locale UI) -----------
   function mapLabelsToCategory(labels: string[]): string {
-    // normalizăm la " cuvinte " ca să potrivim doar termeni întregi
+    // potrivire pe cuvinte întregi, ca să nu confundăm "ballpoint" cu "ball"
     const text = " " + labels.map((s) => s.toLowerCase()).join(" ").replace(/[^a-z0-9 ]+/g, " ") + " ";
     const hasAny = (phrases: string[]) => phrases.some((p) => text.includes(` ${p} `));
 
     const STATIONERY = [
       "ballpoint", "pen", "fountain pen", "pencil", "mechanical pencil",
-      "marker", "highlighter", "eraser", "notebook" // atenție: nu "notebook computer"
+      "marker", "highlighter", "eraser", "notebook"
     ];
     const FURNITURE = [
       "bed","four-poster","sofa","couch","studio couch","futon",
@@ -210,17 +210,38 @@ export default function AddObjectPage() {
     ];
     const BOOKS = ["book"];
 
-    if (hasAny(STATIONERY)) return "papetărie";
-    if (hasAny(FURNITURE)) return "mobilier";
-    if (hasAny(ELECTRONICS)) return "electronice";
-    if (hasAny(SPORT)) return "sport";
-    if (hasAny(BOOKS) && !text.includes(" notebook computer ")) return "cărți";
-    if (hasAny(FASHION)) return "moda";
-    return "altele";
+    if (hasAny(STATIONERY)) return "Papetărie";
+    if (hasAny(FURNITURE)) return "Mobilier";
+    if (hasAny(ELECTRONICS)) return "Electronice";
+    if (hasAny(SPORT)) return "Sport";
+    if (hasAny(BOOKS) && !text.includes(" notebook computer ")) return "Cărți";
+    if (hasAny(FASHION)) return "Modă";
+    return "Altele";
   }
 
-  // ---------------- CLASIFICARE + OCR ----------------
-  async function classifyWithPayload(payload: object, preview?: string, meta?: { fileName?: string; url?: string }) {
+  // ---------------- CLASIFICARE + OCR + TAXONOMIE ----------------
+  async function classifyWithPayload(
+    payload: object,
+    preview?: string,
+    meta?: { fileName?: string; url?: string }
+  ) {
+    // helper local: apel la /api/categorize (embeddings)
+    async function categorizeByTaxonomy(title: string, description: string, hint?: string) {
+      try {
+        const r = await fetch("/api/categorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, description, hint })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const data: any = await r.json();
+        const path = data?.best?.path || data?.best?.name || null; // ex: "Office Supplies > Writing & Correction > Pens"
+        if (path) setSuggestedCategory(path);
+      } catch (e) {
+        console.warn("categorize failed:", e);
+      }
+    }
+
     try {
       setClassifying(true);
       setClassifyError(null);
@@ -228,6 +249,7 @@ export default function AddObjectPage() {
       setSuggestedCategory(null);
       if (preview) setPreviewUrl(preview);
 
+      // 1) clasificare vizuală (server: /api/classify)
       const res = await fetch("/api/classify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -239,26 +261,33 @@ export default function AddObjectPage() {
 
       const label = (json?.suggestion ?? "").trim();
       const raw = json?.raw ?? [];
-      // chip-urile în română:
       setTop3(raw.slice(0, 3).map((x) => roLabelClient(x.label)));
 
+      // 2) categorie locală (UI) ca fallback rapid
       const rawLabels = raw.map((x) => x.label);
-      const cat = mapLabelsToCategory(rawLabels);
-      if (!form.category) setForm((p) => ({ ...p, category: cat }));
-      setSuggestedCategory(cat);
+      const catLocal = mapLabelsToCategory(rawLabels);
+      if (!form.category) setForm((p) => ({ ...p, category: catLocal }));
 
+      // 3) titlu „deștept”
       let nameFromSource = "";
       if (meta?.fileName) nameFromSource = cleanNameLikeFilename(meta.fileName);
-      else if (meta?.url) nameFromSource = cleanNameLikeFilename(lastPathSegmentFromUrl(meta.url));
+      else if (meta?.url) nameFromSource = cleanNameLikeFilename(lastPathSegmentFromUrl(meta?.url));
 
       const brand = meta?.url ? brandFromUrl(meta.url) : brandFromOCR(json?.ocr);
-
       const nice = buildNiceTitle(label || null, nameFromSource || null, { brand });
       setSuggestedTitle(nice);
-      if (nice && !form.title.trim()) {
-        const finalTitle = nice.length > 80 ? nice.slice(0, 77).trim() + "…" : nice;
+
+      let finalTitle = form.title.trim();
+      if (nice && !finalTitle) {
+        finalTitle = nice.length > 80 ? nice.slice(0, 77).trim() + "…" : nice;
         setForm((p) => ({ ...p, title: finalTitle }));
       }
+
+      // 4) taxonomie embeddings (server: /api/categorize)
+      const textForTitle = finalTitle || nice || form.title || "";
+      const textForDesc = form.description || "";
+      const hint = label || "";
+      await categorizeByTaxonomy(textForTitle, textForDesc, hint);
     } catch (err: any) {
       console.error(err);
       setClassifyError(err?.message || "Nu am putut clasifica imaginea.");
@@ -334,7 +363,7 @@ export default function AddObjectPage() {
         user_id: user.id,
         title: form.title.trim(),
         description: form.description.trim(),
-        category: form.category.trim() || null,
+        category: form.category.trim() || null, // (UI category, nu path)
         image_url: imageUrl || null,
         created_at: new Date().toISOString(),
       };
@@ -411,19 +440,19 @@ export default function AddObjectPage() {
           <span>Categorie</span>
           <select value={form.category} onChange={onInput("category")} className={s.select}>
             <option value="">— alege —</option>
-            <option value="electronice">Electronice</option>
-            <option value="mobilier">Mobilier</option>
-            <option value="papetărie">Papetărie</option>
-            <option value="sport">Sport</option>
-            <option value="cărți">Cărți</option>
-            <option value="moda">Modă</option>
-            <option value="altele">Altele</option>
+            <option value="Electronice">Electronice</option>
+            <option value="Mobilier">Mobilier</option>
+            <option value="Papetărie">Papetărie</option>
+            <option value="Sport">Sport</option>
+            <option value="Cărți">Cărți</option>
+            <option value="Modă">Modă</option>
+            <option value="Altele">Altele</option>
           </select>
           <div className={s.hint}>
             {classifying && "Încerc să deduc și categoria…"}
             {!classifying && suggestedCategory && (
               <>
-                Sugestie categorie: <b>{suggestedCategory}</b> (poți schimba)
+                Sugestie taxonomie: <b>{suggestedCategory}</b> (poți schimba)
               </>
             )}
           </div>
