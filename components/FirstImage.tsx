@@ -1,6 +1,9 @@
 // components/FirstImage.tsx
 
-import Image, { ImageProps } from "next/image";
+"use client";
+
+import { ImageProps } from "next/image";
+import SafeImage from "@/components/SafeImage";
 import { firstImage } from "@/lib/images";
 
 type Props = Omit<ImageProps, "src"> & {
@@ -17,5 +20,5 @@ export default function FirstImage({
   ...rest
 }: Props) {
   const resolved = firstImage(srcList ?? srcSingle ?? null);
-  return <Image src={resolved} alt={alt} {...rest} />;
+  return <SafeImage src={resolved} alt={alt} {...rest} />;
 }
