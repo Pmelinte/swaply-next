@@ -1,10 +1,12 @@
-import RawSafeImage, { type Props } from "./RawSafeImage";
+// components/SafeImage.tsx
+import RawSafeImage from "./RawSafeImage";
+import type { ComponentProps } from "react";
 
 /**
- * Wrapper simplu peste RawSafeImage – ținem aceeași semnătură de props.
- * Dacă vrei să inserezi aici transformări Cloudinary pe viitor, o poți face
- * înainte de a trimite `srcList` mai departe.
+ * Wrapper simplu peste RawSafeImage – păstrăm aceeași semnătură de props.
  */
+type Props = ComponentProps<typeof RawSafeImage>;
+
 export default function SafeImage(props: Props) {
   return <RawSafeImage {...props} />;
 }
