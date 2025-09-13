@@ -32,11 +32,12 @@ export default function RawSafeImage(props: Props) {
   } = props;
 
   const candidates = useMemo(() => {
-    const uniq = Array.from(new Set((srcList || []).filter(Boolean)));
-    // fallback generic
-    if (!uniq.includes("/no-image.png")) uniq.push("/no-image.png");
-    return uniq;
-  }, [srcList]);
+  const uniq = Array.from(new Set((srcList || []).filter(Boolean)));
+  // fallback-uri locale (SVG + PNG)
+  if (!uniq.includes("/no-image.svg")) uniq.push("/no-image.svg");
+  if (!uniq.includes("/no-image.png")) uniq.push("/no-image.png");
+  return uniq;
+}, [srcList]);
 
   const [idx, setIdx] = useState(0);
 
