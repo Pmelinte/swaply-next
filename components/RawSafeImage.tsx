@@ -1,53 +1,73 @@
-// components/RawSafeImage.tsx
+import Image from "next/image";
+import { useMemo, useState, useEffect } from "react";
 
-"use client";
-
-import React, { useEffect, useState } from "react";
-import { PLACEHOLDER_IMAGE } from "@/lib/images";
-
-type Props = {
-  src?: string | null;
-  alt?: string;
-  className?: string;
-  /** Dacă vrei comportament de `fill`, pune true și asigură-te că părintele are `relative` + dimensiuni. */
+export type Props = {
+  /** Listează candidații în ordinea preferinței (ex: [cloudinaryUrl, cdnUrl, localUrl]) */
+  srcList: string[];
+  alt: string;
+  /** Dacă e true, folosește Next/Image cu `fill`. Altfel width+height. */
   fill?: boolean;
   width?: number;
   height?: number;
-  style?: React.CSSProperties;
+  className?: string;
+  /** IMPORTANT: permite Next/Image să calculeze corect layout-ul responsive. */
+  sizes?: string;
+  /** Poți marca anumite imagini ca prioritare (fold-ul inițial). */
+  priority?: boolean;
+  /** Calitatea pentru encoder (jpeg/webp/avif). */
+  quality?: number;
 };
 
-export default function RawSafeImage({
-  src,
-  alt = "",
-  className = "",
-  fill = false,
-  width,
-  height,
-  style,
-}: Props) {
-  const normalize = (s?: string | null) =>
-    s && typeof s === "string" && s.trim() ? s.trim() : PLACEHOLDER_IMAGE;
+export default function RawSafeImage(props: Props) {
+  const {
+    srcList,
+    alt,
+    fill = false,
+    width,
+    height,
+    className,
+    sizes,
+    priority = false,
+    quality,
+  } = props;
 
-  const [safeSrc, setSafeSrc] = useState<string>(normalize(src));
+  const candidates = useMemo(() => {
+    const uniq = Array.from(new Set((srcList || []).filter(Boolean)));
+    // fallback generic
+    if (!uniq.includes("/no-image.png")) uniq.push("/no-image.png");
+    return uniq;
+  }, [srcList]);
 
+  const [idx, setIdx] = useState(0);
+
+  // dacă se schimbă lista, începe iar de la primul
   useEffect(() => {
-    setSafeSrc(normalize(src));
-  }, [src]);
+    setIdx(0);
+  }, [candidates.join("|")]);
 
-  const combinedClass =
-    (fill ? "absolute inset-0 w-full h-full object-cover " : "") +
-    (className || "");
+  const handleError = () => {
+    // încearcă următorul candidat până la fallback
+    setIdx((i) => Math.min(i + 1, candidates.length - 1));
+  };
 
+  // atenție: pentru `fill`, containerul părinte trebuie să aibă position: relative
   return (
-    <img
-      src={safeSrc}
-      alt={alt}
-      className={combinedClass}
-      width={fill ? undefined : width}
-      height={fill ? undefined : height}
-      style={style}
-      loading="lazy"
-      onError={() => setSafeSrc(PLACEHOLDER_IMAGE)}
-    />
+    <div className={fill ? "relative h-full w-full" : undefined}>
+      <Image
+        src={candidates[idx]}
+        alt={alt || "image"}
+        {...(fill
+          ? { fill: true }
+          : {
+              width: width ?? 640,
+              height: height ?? 480,
+            })}
+        className={className}
+        sizes={sizes}
+        priority={priority}
+        quality={quality}
+        onError={handleError}
+      />
+    </div>
   );
 }
