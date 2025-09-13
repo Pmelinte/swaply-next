@@ -1,6 +1,7 @@
 // pages/index.tsx
 import Head from "next/head";
 import Nav from "../components/Nav";
+import ObjectCard from "@/components/ObjectCard";
 
 export default function Home() {
   return (

@@ -1,313 +1,129 @@
 // pages/objects/[id].tsx
-import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import Nav from "../../components/Nav";
+import RawSafeImage from "@/components/RawSafeImage";
 
 type Obj = {
-  id: number;
-  title: string;
+  id: string;
+  title: string | null;
   description: string | null;
   category: string | null;
   image_url: string | null;
-  user_id: string;           // proprietarul obiectului (UUID din auth.users)
-  created_at?: string;
+  created_at: string | null;
+  // opțional: poți adăuga images: string[] dacă ai o coloană separată
 };
 
-type MyObjLite = { id: number; title: string | null };
-
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function ObjectDetails() {
+// aceeași validare ca în RawSafeImage, dar expusă aici pentru a filtra sursele
+function isProbablyValidImageUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (!/^https?:$/.test(u.protocol)) return false;
+    const tld = (u.hostname.split(".").pop() || "").toLowerCase();
+    if (/(invalid|example|test|localhost)$/i.test(tld)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export default function ObjectDetailsPage() {
   const router = useRouter();
-  const id = useMemo(() => Number(router.query.id as string), [router.query.id]);
+  const { id } = router.query as { id?: string };
 
   const [item, setItem] = useState<Obj | null>(null);
-  const [me, setMe] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // edit fields (păstrăm editarea ca înainte)
-  const [editMode, setEditMode] = useState(false);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-
-  // propose swap
-  const [myObjects, setMyObjects] = useState<MyObjLite[]>([]);
-  const [selectedMyId, setSelectedMyId] = useState<number | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [proposing, setProposing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id || Number.isNaN(id)) return;
-    const run = async () => {
-      setMsg(null);
+    if (!id) return;
+    let alive = true;
+
+    (async () => {
       setLoading(true);
+      setErr(null);
+      try {
+        const { data, error } = await supabase
+          .from("objects")
+          .select("*")
+          .eq("id", id)
+          .single();
 
-      const [{ data: auth }, { data, error }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.from("objects").select("*").eq("id", id).maybeSingle(),
-      ]);
-
-      if (auth.user) setMe(auth.user.id);
-
-      if (error) setMsg(error.message);
-      else if (!data) setMsg("Obiectul nu a fost găsit sau nu ai permisiune să-l vezi.");
-      else {
-        const o = data as Obj;
-        setItem(o);
-        setTitle(o.title || "");
-        setCategory(o.category || "");
-        setDescription(o.description || "");
+        if (error) throw error;
+        if (alive) setItem((data || null) as Obj | null);
+      } catch (e: any) {
+        if (alive) setErr(String(e?.message || e));
+      } finally {
+        if (alive) setLoading(false);
       }
-      setLoading(false);
+    })();
+
+    return () => {
+      alive = false;
     };
-    run();
   }, [id]);
 
-  // după ce știm „me”, încărcăm obiectele mele pentru dropdown
-  useEffect(() => {
-    if (!me) return;
-    const loadMine = async () => {
-      const { data, error } = await supabase
-        .from("objects")
-        .select("id,title")
-        .eq("user_id", me)
-        .order("created_at", { ascending: false });
-
-      if (!error && data) {
-        const arr = data as MyObjLite[];
-        setMyObjects(arr);
-        if (arr.length) setSelectedMyId(arr[0].id);
-      }
-    };
-    loadMine();
-  }, [me]);
-
-  const iOwnIt = !!(item && me && item.user_id === me);
-
-  const uploadToCloudinary = async (f: File) => {
-    const cloud = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME as string;
-    const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET as string;
-    const form = new FormData();
-    form.append("file", f);
-    form.append("upload_preset", preset);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/upload`, { method: "POST", body: form });
-    if (!res.ok) throw new Error("Upload eșuat către Cloudinary.");
-    const data = await res.json();
-    return data.secure_url as string;
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!item) return;
-    setMsg(null);
-    try {
-      let image_url = item.image_url;
-      if (file) image_url = await uploadToCloudinary(file);
-
-      const { error } = await supabase
-        .from("objects")
-        .update({ title, category, description, image_url })
-        .eq("id", item.id);
-
-      if (error) throw error;
-      setItem({ ...item, title, category, description, image_url });
-      setEditMode(false);
-      setMsg("Salvat.");
-    } catch (err: any) {
-      setMsg(err?.message || "Nu am putut salva.");
+  // compunem lista de surse posibile; momentan doar image_url
+  const srcList = useMemo(() => {
+    const list: string[] = [];
+    if (item?.image_url && typeof item.image_url === "string") {
+      list.push(item.image_url.trim());
     }
-  };
-
-  const handleDelete = async () => {
-    if (!item) return;
-    const ok = confirm("Ștergi acest obiect?");
-    if (!ok) return;
-    const { error } = await supabase.from("objects").delete().eq("id", item.id);
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    router.push("/my-objects");
-  };
-
-  const proposeSwap = async () => {
-    if (!item || !me) return;
-    if (iOwnIt) {
-      setMsg("Nu poți propune schimb pe propriul obiect.");
-      return;
-    }
-    if (!selectedMyId) {
-      setMsg("Alege un obiect din lista ta.");
-      return;
-    }
-    setMsg(null);
-    setProposing(true);
-    try {
-      // INSERT respectând politicile: from_user_id trebuie să fie auth.uid()
-      const { error } = await supabase.from("matches").insert({
-        object1_id: selectedMyId,  // obiectul meu
-        object2_id: item.id,       // obiectul celuilalt
-        from_user_id: me,
-        to_user_id: item.user_id,
-        status: "pending",
-      });
-      if (error) throw error;
-      setMsg("Propunere trimisă. Vezi la pagina Matches.");
-      // optional redirect după 1s
-      // setTimeout(() => router.push("/matches"), 800);
-    } catch (err: any) {
-      setMsg(err?.message || "Nu am putut trimite propunerea.");
-    } finally {
-      setProposing(false);
-    }
-  };
+    // dacă pe viitor adaugi multiple imagini, fă push aici
+    return list.filter(isProbablyValidImageUrl);
+  }, [item]);
 
   return (
-    <main style={{ minHeight: "100vh", background: "#0f172a", color: "white" }}>
-      <Nav />
-      <section style={{ maxWidth: 960, margin: "0 auto", padding: "1rem 2rem" }}>
-        <a href="/objects" style={{ color: "#93c5fd" }}>← Înapoi la listă</a>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      <Link href="/objects" className="text-sm text-blue-600 hover:underline">
+        ← Înapoi la listă
+      </Link>
 
-        {loading && <p>Se încarcă…</p>}
-        {msg && <p style={{ color: msg.includes("Salvat") || msg.includes("Propunere") ? "#86efac" : "#fca5a5" }}>{msg}</p>}
+      <div className="mt-4">
+        {/* WRAPPER de imagine: aspect 16/9, fără tăierea fallback-ului */}
+        <div className="relative aspect-[16/9] w-full rounded-xl bg-zinc-900 overflow-hidden flex items-center justify-center">
+          {/* 
+            IMPORTANT:
+            - Nu folosim position:absolute pe imagine (evită tăierea fallback-ului).
+            - RawSafeImage știe singur să facă object-fit: contain pentru fallback
+              și object-fit: cover pentru URL-urile valide.
+          */}
+          <RawSafeImage
+            srcList={srcList}
+            alt={item?.title || "Obiect"}
+            className="block w-full h-full"
+          />
+        </div>
 
-        {/* Vizualizare */}
-        {!loading && item && !editMode && (
-          <article style={{ marginTop: 16, border: "1px solid #1f2937", borderRadius: 16, padding: 16, background: "rgba(2,6,23,0.6)" }}>
-            {item.image_url && (
-              <img
-                src={item.image_url}
-                alt={item.title}
-                style={{ width: "100%", maxHeight: 360, objectFit: "cover", borderRadius: 12, marginBottom: 12 }}
-              />
-            )}
-            <h1 style={{ marginTop: 0 }}>{item.title}</h1>
-            {item.category && <p style={{ color: "#94a3b8" }}>Categorie: {item.category}</p>}
-            {item.description && <p style={{ color: "#cbd5e1" }}>{item.description}</p>}
+        <div className="mt-6 space-y-2">
+          <h1 className="text-2xl font-semibold">{item?.title || "Fără titlu"}</h1>
+          <p className="text-zinc-400">
+            Categorie: <span className="text-zinc-200">{item?.category || "—"}</span>
+          </p>
+          {!!item?.created_at && (
+            <p className="text-zinc-400">
+              Creat:{" "}
+              <span className="text-zinc-200">
+                {new Date(item.created_at).toLocaleString()}
+              </span>
+            </p>
+          )}
+          {item?.description && (
+            <p className="text-zinc-300 leading-relaxed">{item.description}</p>
+          )}
+        </div>
 
-            {/* acțiuni pentru proprietar */}
-            {iOwnIt && (
-              <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  onClick={() => setEditMode(true)}
-                  style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #334155", background: "#0b1220", color: "white", cursor: "pointer" }}
-                >
-                  Editează
-                </button>
-                <button
-                  onClick={handleDelete}
-                  style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #7f1d1d", background: "#1f2937", color: "#fecaca", cursor: "pointer" }}
-                >
-                  Șterge
-                </button>
-              </div>
-            )}
-
-            {/* propunere schimb – doar dacă obiectul NU e al meu */}
-            {!iOwnIt && (
-              <div style={{ marginTop: 16, borderTop: "1px solid #1f2937", paddingTop: 12 }}>
-                <h3 style={{ margin: "8px 0" }}>Propune schimb</h3>
-                {myObjects.length === 0 ? (
-                  <p style={{ color: "#94a3b8" }}>
-                    Nu ai încă obiecte proprii. <a href="/add" style={{ color: "#93c5fd" }}>Adaugă unul</a> ca să poți propune schimb.
-                  </p>
-                ) : (
-                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    <label style={{ color: "#cbd5e1" }}>Alege obiectul tău:</label>
-                    <select
-                      value={selectedMyId ?? ""}
-                      onChange={(e) => setSelectedMyId(Number(e.target.value))}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: 8,
-                        background: "#0b1220",
-                        color: "white",
-                        border: "1px solid #334155",
-                        minWidth: 220,
-                      }}
-                    >
-                      {myObjects.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.title || `(ID ${o.id})`}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={proposeSwap}
-                      disabled={proposing}
-                      style={{
-                        padding: "10px 14px",
-                        borderRadius: 10,
-                        border: "none",
-                        background: "#2563eb",
-                        color: "white",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        opacity: proposing ? 0.7 : 1,
-                      }}
-                    >
-                      {proposing ? "Se trimite…" : "Trimite propunerea"}
-                    </button>
-                    <a href="/matches" style={{ color: "#93c5fd" }}>Vezi Matches</a>
-                  </div>
-                )}
-              </div>
-            )}
-          </article>
+        {loading && <p className="mt-6 text-zinc-400">Se încarcă…</p>}
+        {err && (
+          <pre className="mt-4 text-red-500 whitespace-pre-wrap">{err}</pre>
         )}
-
-        {/* Editare */}
-        {!loading && item && editMode && iOwnIt && (
-          <form
-            onSubmit={handleUpdate}
-            style={{ marginTop: 16, border: "1px solid #1f2937", borderRadius: 16, padding: 16, background: "rgba(2,6,23,0.6)" }}
-          >
-            <h2 style={{ marginTop: 0 }}>Editează obiect</h2>
-
-            <label style={{ display: "block", marginBottom: 6 }}>Titlu</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #334155", background: "#0b1220", color: "white", marginBottom: 12 }}
-            />
-
-            <label style={{ display: "block", marginBottom: 6 }}>Categorie</label>
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #334155", background: "#0b1220", color: "white", marginBottom: 12 }}
-            />
-
-            <label style={{ display: "block", marginBottom: 6 }}>Descriere</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #334155", background: "#0b1220", color: "white", marginBottom: 12 }}
-            />
-
-            <label style={{ display: "block", marginBottom: 6 }}>Imagine (opțional)</label>
-            <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ marginBottom: 16 }} />
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="submit" style={{ padding: "10px 14px", borderRadius: 10, border: "none", background: "#2563eb", color: "white", fontWeight: 700, cursor: "pointer" }}>
-                Salvează
-              </button>
-              <button type="button" onClick={() => setEditMode(false)} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #334155", background: "#0b1220", color: "white", cursor: "pointer" }}>
-                Renunță
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }

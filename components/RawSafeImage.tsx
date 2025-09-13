@@ -1,74 +1,107 @@
-import Image from "next/image";
-import { useMemo, useState, useEffect } from "react";
+// components/RawSafeImage.tsx
+import React, { useEffect, useMemo, useState } from "react";
 
-export type Props = {
-  /** Listează candidații în ordinea preferinței (ex: [cloudinaryUrl, cdnUrl, localUrl]) */
-  srcList: string[];
-  alt: string;
-  /** Dacă e true, folosește Next/Image cu `fill`. Altfel width+height. */
-  fill?: boolean;
-  width?: number;
-  height?: number;
+type Props = {
+  srcList?: string[];
+  alt?: string;
+  width?: number | string;
+  height?: number | string;
   className?: string;
-  /** IMPORTANT: permite Next/Image să calculeze corect layout-ul responsive. */
-  sizes?: string;
-  /** Poți marca anumite imagini ca prioritare (fold-ul inițial). */
-  priority?: boolean;
-  /** Calitatea pentru encoder (jpeg/webp/avif). */
-  quality?: number;
+  style?: React.CSSProperties;
 };
 
-export default function RawSafeImage(props: Props) {
-  const {
-    srcList,
-    alt,
-    fill = false,
-    width,
-    height,
-    className,
-    sizes,
-    priority = false,
-    quality,
-  } = props;
+const FALLBACK = "/no-image.png";
 
-  const candidates = useMemo(() => {
-  const uniq = Array.from(new Set((srcList || []).filter(Boolean)));
-  // fallback-uri locale (SVG + PNG)
-  if (!uniq.includes("/no-image.svg")) uniq.push("/no-image.svg");
-  if (!uniq.includes("/no-image.png")) uniq.push("/no-image.png");
-  return uniq;
-}, [srcList]);
+// Acceptă doar URL-uri http(s) valide și respinge TLD-uri problematice (ex. .invalid)
+function isProbablyValidImageUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (!/^https?:$/.test(u.protocol)) return false;
+    const tld = (u.hostname.split(".").pop() || "").toLowerCase();
+    if (/(invalid|example|test|localhost)$/i.test(tld)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  const [idx, setIdx] = useState(0);
+export default function RawSafeImage({
+  srcList = [],
+  alt = "",
+  width,
+  height,
+  className,
+  style,
+}: Props) {
+  // 1) filtrăm agresiv URL-urile ciudate
+  const candidates = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (srcList || [])
+            .filter((s): s is string => !!s && typeof s === "string")
+            .map((s) => s.trim())
+            .filter(isProbablyValidImageUrl)
+        )
+      ),
+    [srcList]
+  );
 
-  // dacă se schimbă lista, începe iar de la primul
+  // 2) fallback logic
+  const [index, setIndex] = useState(0);
+  const [useFallback, setUseFallback] = useState(candidates.length === 0);
+
   useEffect(() => {
-    setIdx(0);
-  }, [candidates.join("|")]);
+    setIndex(0);
+    setUseFallback(candidates.length === 0);
+  }, [candidates.length]);
 
   const handleError = () => {
-    // încearcă următorul candidat până la fallback
-    setIdx((i) => Math.min(i + 1, candidates.length - 1));
+    if (!useFallback && index < candidates.length - 1) {
+      setIndex((i) => i + 1); // încearcă următorul candidat valid
+    } else {
+      setUseFallback(true); // ultimă plasă de siguranță -> fallback local
+    }
   };
 
-  // atenție: pentru `fill`, containerul părinte trebuie să aibă position: relative
+  const currentSrc = useFallback ? FALLBACK : candidates[index] ?? FALLBACK;
+  const isFallback = useFallback || currentSrc === FALLBACK;
+
+  const imgStyle: React.CSSProperties = isFallback
+    ? {
+        // FALLBACK: arată întreaga imagine, centrată (fără tăiere)
+        maxWidth: "100%",
+        maxHeight: "100%",
+        width: "auto",
+        height: "auto",
+        objectFit: "contain",
+        objectPosition: "center",
+        display: "block",
+        background: "#0b0f19",
+        ...style,
+      }
+    : {
+        // IMAGINE VALIDĂ: umple cardul frumos
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+        objectPosition: "center",
+        display: "block",
+        background: "#0b0f19",
+        ...style,
+      };
+
   return (
-    <div className={fill ? "relative h-full w-full" : undefined}>
-      <Image
-        src={candidates[idx]}
-        alt={alt || "image"}
-        {...(fill
-          ? { fill: true }
-          : {
-              width: width ?? 640,
-              height: height ?? 480,
-            })}
-        className={className}
-        sizes={sizes}
-        priority={priority}
-        quality={quality}
-        onError={handleError}
-      />
-    </div>
+    <img
+      src={currentSrc}
+      alt={alt}
+      width={width}
+      height={height}
+      onError={handleError}
+      style={imgStyle}
+      className={className}
+      loading="lazy"
+      decoding="async"
+    />
   );
 }

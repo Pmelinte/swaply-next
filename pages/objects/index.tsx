@@ -1,84 +1,77 @@
 // pages/objects/index.tsx
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import ObjectCard from "@/components/ObjectCard";
 
-type Obj = {
-  id: string;
-  title: string;
-  description: string | null;
-  category: string | null;
-  image_url: string | null;
-  created_at?: string;
-};
+type Obj = Record<string, any>;
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function ObjectsIndex() {
+export default function ObjectsPage() {
   const [items, setItems] = useState<Obj[]>([]);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const run = async () => {
-      const { data, error } = await supabase
-        .from("objects")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      setErr(null);
+      try {
+        // IMPORTANT: luăm toate coloanele (inclusiv image_url / images)
+        const { data, error } = await supabase
+          .from("objects")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(100);
 
-      if (error) setMsg(error.message);
-      else setItems((data as Obj[]) || []);
-      setLoading(false);
+        if (error) throw error;
+        if (alive) setItems((data || []) as Obj[]);
+      } catch (e: any) {
+        if (alive) setErr(String(e?.message || e));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
     };
-    run();
   }, []);
 
+  const containerStyle: React.CSSProperties = {
+    maxWidth: 1200,
+    margin: "0 auto",
+    padding: "24px 16px",
+  };
+
+  const gridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+    gap: 20,
+  };
+
   return (
-    <main style={{ minHeight: "100vh", background: "#0f172a", color: "white" }}>
-      <nav style={{ padding: "1rem 2rem", display: "flex", gap: 16, alignItems: "center" }}>
-        <a href="/" style={{ fontWeight: 700, fontSize: 18, color: "white" }}>Swaply</a>
-        <a href="/add" style={{ color: "#93c5fd" }}>Add</a>
-        <a href="/my-objects" style={{ color: "#93c5fd" }}>My Objects</a>
-      </nav>
+    <div style={containerStyle}>
+      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>
+        Toate obiectele
+      </h1>
+      <p style={{ fontSize: 12, color: "#8b8f99", marginBottom: 12 }}>
+        count = {items.length}
+      </p>
 
-      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "1rem 2rem" }}>
-        <h1 style={{ marginTop: 0 }}>Toate obiectele</h1>
-        {loading && <p>Se încarcă…</p>}
-        {msg && <p style={{ color: "#fca5a5" }}>{msg}</p>}
-        {!loading && !items.length && <p>Încă nu există obiecte.</p>}
+      {loading && <p>Se încarcă…</p>}
+      {err && (
+        <pre style={{ color: "#ef4444", whiteSpace: "pre-wrap" }}>{err}</pre>
+      )}
 
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-          gap: 16
-        }}>
-          {items.map((o) => (
-            <article key={o.id} style={{
-              border: "1px solid #1f2937",
-              borderRadius: 16,
-              padding: 12,
-              background: "rgba(2,6,23,0.6)"
-            }}>
-              <a href={`/objects/${o.id}`} style={{ color: "inherit", textDecoration: "none" }}>
-                {o.image_url && (
-                  <img
-                    src={o.image_url}
-                    alt={o.title}
-                    style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 12, marginBottom: 8 }}
-                  />
-                )}
-                <h3 style={{ margin: "6px 0" }}>{o.title}</h3>
-                {o.category && <p style={{ color: "#94a3b8", margin: "4px 0" }}>Categorie: {o.category}</p>}
-                {o.description && <p style={{ color: "#cbd5e1" }}>{o.description}</p>}
-              </a>
-            </article>
-          ))}
-        </div>
-      </section>
-    </main>
+      <div style={gridStyle}>
+        {items.map((obj) => (
+          <ObjectCard key={obj.id ?? JSON.stringify(obj)} obj={obj} />
+        ))}
+      </div>
+    </div>
   );
 }
