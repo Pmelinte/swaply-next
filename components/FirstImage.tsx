@@ -1,11 +1,15 @@
-import RawSafeImage, { type Props } from "./RawSafeImage";
+// components/FirstImage.tsx
+import RawSafeImage from "./RawSafeImage";
+import React from "react";
 
 /**
- * În multe proiecte `FirstImage` alegea doar primul URL.
- * Ca să nu stricăm apelurile existente, păstrăm aceeași interfață ca SafeImage.
- * Dacă în codul tău `FirstImage` primește altă formă de date, poți continua să-i
- * trimiți `srcList` exact ca în ObjectCard.
+ * Wrapper subțire peste RawSafeImage.
+ * Nu mai importăm un tip inexistent; derivăm tipul din componentă.
  */
+type Props = React.ComponentProps<typeof RawSafeImage>;
+
 export default function FirstImage(props: Props) {
+  // RawSafeImage deja alege primul URL valid/fallback,
+  // deci doar pasăm prop-urile mai departe.
   return <RawSafeImage {...props} />;
 }
