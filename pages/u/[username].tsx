@@ -13,7 +13,7 @@ type Props = {
   contact: Contact;
 };
 
-// -------- GSSP: folosește protocolul corect pe Vercel (https) ----------
+// -------- SSR: folosește protocolul corect pe Vercel (https) ----------
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const username = ctx.params?.username as string;
 
@@ -25,12 +25,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const base = `${proto}://${host}`;
 
   try {
-    const resp = await fetch(
-      `${base}/api/profile/${encodeURIComponent(username)}`
-    );
+    const resp = await fetch(`${base}/api/profile/${encodeURIComponent(username)}`);
 
     if (!resp.ok) {
-      // Nu dăm 404 direct; afișăm pagină goală cu fallback-uri.
+      // Afișează pagină goală cu fallback-uri; nu aruncăm 404 direct.
       console.error('Profile API error', resp.status, await resp.text());
       return {
         props: { profile: null, wishlist: [], objects: [], contact: null },
@@ -61,17 +59,17 @@ function formatDateUTC(input?: string | null) {
   return d.toISOString().slice(0, 10); // YYYY-MM-DD în UTC
 }
 
-/** Găsește primul câmp de imagine folosit de obiecte */
-function firstImage(o: any): string | null {
-  if (o.image_url) return o.image_url;
-  if (o.cover_url) return o.cover_url;
-  if (o.img_url) return o.img_url;
-  if (o.image) return o.image;
-  if (Array.isArray(o.images) && o.images.length) return o.images[0];
-  return null;
+/** Returnează URL-ul imaginii; dacă nu există, folosește fallback local */
+function firstImage(o: any): string {
+  if (o?.image_url) return o.image_url;
+  if (o?.cover_url) return o.cover_url;
+  if (o?.img_url) return o.img_url;
+  if (o?.image) return o.image;
+  if (Array.isArray(o?.images) && o.images.length) return o.images[0];
+  return '/no-image.png'; // Fallback local
 }
 
-/** Domenii permise pentru <Image>; restul cad pe <img> ca fallback sigur */
+/** Domenii permise pentru <Image>; restul cad pe <img> ca fallback */
 const ALLOWED_IMG_HOSTS = new Set(
   (process.env.NEXT_PUBLIC_IMAGE_HOSTS || '')
     .split(',')
@@ -131,7 +129,6 @@ export default function UserPublicPage({
 }: Props) {
   const [tab, setTab] = React.useState<'obj' | 'wish' | 'prefs'>('obj');
 
-  // fallback-uri dacă API-ul a eșuat
   if (!profile) {
     return (
       <main style={{ maxWidth: 1024, margin: '0 auto', padding: 24 }}>
@@ -143,8 +140,7 @@ export default function UserPublicPage({
           Profil indisponibil
         </h1>
         <p style={{ opacity: 0.75 }}>
-          Momentan nu putem încărca datele profilului. Încearcă din nou în
-          câteva momente.
+          Momentan nu putem încărca datele profilului. Încearcă din nou în câteva momente.
         </p>
       </main>
     );
@@ -200,9 +196,7 @@ export default function UserPublicPage({
 
         {/* Contact + CTA */}
         <section style={{ marginBottom: 16 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
-            Contact
-          </h2>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>Contact</h2>
           {contact?.email || contact?.phone ? (
             <div
               style={{
@@ -311,7 +305,7 @@ export default function UserPublicPage({
                           position: 'relative',
                         }}
                       >
-                        {src && <SafeImage src={src} alt="" width={800} height={600} />}
+                        <SafeImage src={src} alt="" width={800} height={600} />
                       </div>
                       <div style={{ padding: 12 }}>
                         <div
