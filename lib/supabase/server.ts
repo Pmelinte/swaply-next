@@ -3,13 +3,14 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { validateEnv } from "../env";
 
-export function createClient() {
+export async function createClient() {
   const env = validateEnv();
   if (!env.ok) {
     throw new Error("Supabase env invalid: " + env.errors.join(", "));
   }
 
-  const cookieStore = cookies();
+  // În Next 15 tipul poate fi Promise<ReadonlyRequestCookies> -> așteptăm explicit
+  const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL as string,
@@ -23,14 +24,14 @@ export function createClient() {
           try {
             cookieStore.set(name, value, options);
           } catch {
-            // în SSR strict mode, set/remove poate arunca — ignorăm
+            // În unele contexte strict-SSR, set/remove pot arunca — ignorăm
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set(name, "", { ...options, maxAge: 0 });
           } catch {
-            // vezi mai sus
+            // idem
           }
         },
       },

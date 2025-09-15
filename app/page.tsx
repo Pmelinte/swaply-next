@@ -1,41 +1,31 @@
-﻿import { getSupabaseServerAnon } from "@/lib/supabase/server";
-import ObjectCard from "@/components/ObjectCard";
+﻿// app/page.tsx
+import { createClient } from "@/lib/supabase/server";
 
 export const revalidate = 10;
 
-export default async function HomePage() {
-  const supabase = getSupabaseServerAnon();
+export default async function Home() {
+  const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const { data: objects, error } = await supabase
     .from("objects")
-    .select("id,label,notes,category,score,created_at,image_url")
-    .order("created_at", { ascending: false })
-    .limit(24);
-
-  if (error) {
-    return (
-      <div>
-        <h2>Eroare la încărcarea obiectelor</h2>
-        <pre className="small">{error.message}</pre>
-        <p className="small">Verifică RLS/policies pentru <code>objects</code>: <b>select</b> public.</p>
-      </div>
-    );
-  }
-
-  if (!data || data.length === 0) {
-    return (
-      <div>
-        <h2>Nu sunt (încă) obiecte</h2>
-        <p className="small">Adaugă unul din pagina <code>/add</code> sau rulează seed.</p>
-      </div>
-    );
-  }
+    .select("id,label,title,description")
+    .limit(12);
 
   return (
-    <div className="grid">
-      {data.map((o) => (
-        <ObjectCard key={o.id} object={o} />
-      ))}
-    </div>
+    <main className="p-4 space-y-4">
+      <h1 className="text-2xl font-semibold">Swaply</h1>
+
+      {error && (
+        <p className="text-red-600">
+          Eroare la încărcarea obiectelor: {error.message}
+        </p>
+      )}
+
+      <ul className="list-disc pl-6">
+        {(objects ?? []).map((o: any) => (
+          <li key={o.id}>{o.label ?? o.title ?? `Obiect ${o.id}`}</li>
+        ))}
+      </ul>
+    </main>
   );
 }
