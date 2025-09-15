@@ -10,9 +10,15 @@ export default function LogoutButton() {
     redirect("/");
   }
 
+  // ținem butonul pe aceeași linie cu link-urile din nav
   return (
-    <form action={logout}>
-      <button type="submit">Logout</button>
+    <form action={logout} style={{ display: "inline" }}>
+      <button
+        type="submit"
+        style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+      >
+        Logout
+      </button>
     </form>
   );
 }

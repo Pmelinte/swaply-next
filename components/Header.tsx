@@ -10,20 +10,26 @@ export default async function Header() {
   } = await supabase.auth.getUser();
 
   return (
-    <nav className="flex flex-wrap gap-4 p-4 border-b">
+    <nav style={{ padding: "8px", borderBottom: "1px solid #555" }}>
       <Link href="/">Acasă</Link>
+      <span> | </span>
       <Link href="/health">Health</Link>
+      <span> | </span>
       <Link href="/doctor">Doctor</Link>
+      <span> | </span>
       <Link href="/my-objects">Obiectele mele</Link>
+      <span> | </span>
 
       {!user ? (
         <>
           <Link href="/signup">Signup</Link>
+          <span> | </span>
           <Link href="/login">Login</Link>
         </>
       ) : (
         <>
           <Link href="/me">Me</Link>
+          <span> | </span>
           <LogoutButton />
         </>
       )}
