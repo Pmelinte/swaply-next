@@ -1,12 +1,18 @@
-"use client";
-
-import { getSupabaseBrowser } from "@/lib/supabase/client";
+// components/LogoutButton.tsx
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
 export default function LogoutButton() {
-  async function signOut() {
-    const supabase = getSupabaseBrowser();
+  async function logout() {
+    "use server";
+    const supabase = await createClient();
     await supabase.auth.signOut();
-    window.location.href = "/";
+    redirect("/");
   }
-  return <button className="btn" onClick={signOut}>Logout</button>;
+
+  return (
+    <form action={logout}>
+      <button type="submit">Logout</button>
+    </form>
+  );
 }
