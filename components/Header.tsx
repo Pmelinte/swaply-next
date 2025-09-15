@@ -1,33 +1,32 @@
+// components/Header.tsx
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import LogoutButton from "./LogoutButton";
+import { createClient } from "../lib/supabase/server";
 
 export default async function Header() {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = createClient();
   const {
-    data: { user }
+    data: { user },
   } = await supabase.auth.getUser();
 
   return (
-    <header className="header">
-      <Link href="/" className="brand">
-        <span className="brand-badge">Swaply</span>
-        <span>schimb de obiecte</span>
-      </Link>
+    <nav className="flex flex-wrap gap-4 p-4 border-b">
+      <Link href="/">Acasă</Link>
+      <Link href="/health">Health</Link>
+      <Link href="/doctor">Doctor</Link>
+      <Link href="/my-objects">Obiectele mele</Link>
 
-      {user ? (
-        <div className="hstack">
-          <Link href="/add" className="btn">Add</Link>
-          <Link href="/my-objects" className="btn">My Objects</Link>
-          <span className="small">{user.email}</span>
-          <LogoutButton />
-        </div>
+      {!user ? (
+        <>
+          <Link href="/signup">Signup</Link>
+          <Link href="/login">Login</Link>
+        </>
       ) : (
-        <div className="hstack">
-          <Link href="/login" className="btn">Login</Link>
-        </div>
+        <>
+          <Link href="/me">Me</Link>
+          <LogoutButton />
+        </>
       )}
-    </header>
+    </nav>
   );
 }
