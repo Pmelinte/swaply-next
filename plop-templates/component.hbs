@@ -1,0 +1,17 @@
+"use client";
+import React from "react";
+
+export type {{properCase name}}Props = {
+  title?: string;
+  className?: string;
+  children?: React.ReactNode;
+};
+
+export default function {{properCase name}}({ title = "{{properCase name}}", className, children }: {{properCase name}}Props) {
+  return (
+    <section className={["rounded-2xl border p-4", className].filter(Boolean).join(" ")}>
+      <div className="font-semibold mb-2">{title}</div>
+      <div>{children}</div>
+    </section>
+  );
+}
