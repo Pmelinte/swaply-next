@@ -1,4 +1,44 @@
-﻿:root { --bg:#0b0f14; --card:#121821; --ink:#e7edf5; --muted:#94a3b8; --accent:#50c878; }
+﻿:root {
+  color-scheme: dark light;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  background: #0b0d10;
+  color: #e6e9ef;
+  line-height: 1.6;
+}
+
+/* Nav fix: pe un singur rând, fundal ușor, separatori */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: saturate(140%) blur(6px);
+  background: rgba(20,22,25,0.7);
+  border-bottom: 1px solid #2a2f3a;
+  padding: 10px 16px;
+}
+nav a {
+  color: #e6e9ef;
+  text-decoration: none;
+  margin-right: 14px;
+}
+nav a:hover { text-decoration: underline; }
+
+/* Conținut centrat și respiră */
+main {
+  max-width: 980px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+h1, h2, h3 { line-height: 1.2; margin: 0.8em 0 0.4em; }
+ul { padding-left: 1.25rem; }
+:root { --bg:#0b0f14; --card:#121821; --ink:#e7edf5; --muted:#94a3b8; --accent:#50c878; }
 * { box-sizing: border-box; }
 html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
 a { color: var(--ink); text-decoration: none; }
